@@ -8,6 +8,14 @@
 \description{
 Fetches global breaking news feeds via C++ backend routines and exports the formatted output to an HTML report.
 }
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://github.com/MATHSTATSOU/newsfeed}
+  \item Report bugs at \url{https://github.com/MATHSTATSOU/newsfeed/issues}
+}
+
+}
 \author{
 \strong{Maintainer}: Wayne Stewart \email{wayne.s.stewart@ou.edu}
 

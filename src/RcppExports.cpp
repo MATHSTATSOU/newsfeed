@@ -11,18 +11,19 @@ Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
 // cpp_fetch_breaking_news_html
-std::string cpp_fetch_breaking_news_html();
-RcppExport SEXP _newsfeed_cpp_fetch_breaking_news_html() {
+std::string cpp_fetch_breaking_news_html(Rcpp::CharacterVector subjects);
+RcppExport SEXP _newsfeed_cpp_fetch_breaking_news_html(SEXP subjectsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    rcpp_result_gen = Rcpp::wrap(cpp_fetch_breaking_news_html());
+    Rcpp::traits::input_parameter< Rcpp::CharacterVector >::type subjects(subjectsSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_fetch_breaking_news_html(subjects));
     return rcpp_result_gen;
 END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_newsfeed_cpp_fetch_breaking_news_html", (DL_FUNC) &_newsfeed_cpp_fetch_breaking_news_html, 0},
+    {"_newsfeed_cpp_fetch_breaking_news_html", (DL_FUNC) &_newsfeed_cpp_fetch_breaking_news_html, 1},
     {NULL, NULL, 0}
 };
 

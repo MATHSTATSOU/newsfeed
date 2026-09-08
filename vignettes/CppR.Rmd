@@ -1,0 +1,233 @@
+---
+title: "CppR"
+output: 
+  rmarkdown::html_vignette:
+    toc: true
+    toc_depth: 3
+vignette: >
+  %\VignetteIndexEntry{CppR}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(newsfeed)
+```
+
+
+## 1. The Interlocking History of R and C++
+
+### The Lineage of R and Compiled Extensions
+
+The R language traces its conceptual roots to the **S language**, developed by John Chambers, Rick Becker, and Doug McIlroy at Bell Laboratories in the late 1970s. S was architected around a dual-layer philosophy: provide an interactive, high-level environment for exploratory data analysis, with the ability to offload compute-heavy numerical routines to compiled languages like **Fortran** and **C**.
+
+When Ross Ihaka and Robert Gentleman created **R** in the early 1990s at the University of Auckland, they preserved this interoperability. The standard R internal API allowed developers to interface with compiled C code using the primitive `.C()` and `.Call()` interfaces. However, working directly with `.Call()` required navigating raw R internal pointers (`SEXP` objects), manual memory protection (`PROTECT` and `UNPROTECT` macros), and verbose boilerplate that was prone to memory leaks and segmentation faults.
+
+### The Rise of C++ and the Rcpp Revolution
+
+Bjarne Stroustrup created **C++** at Bell Labs in 1979 as an extension of C ("C with Classes"), adding object-oriented abstractions, strict type safety, deterministic resource management (RAII), and the Standard Template Library (STL).
+
+In the mid-2000s, Dirk Eddelbuettel, Romain François, and contributors developed **Rcpp**. Rcpp bridged R and C++ by abstracting the raw C API of R into clean C++ template classes (`Rcpp::NumericVector`, `Rcpp::CharacterVector`, `Rcpp::List`). Through automated code generation via `Rcpp::compileAttributes()`, R developers can pass objects seamlessly across language boundaries without manual memory management or low-level pointer arithmetic.
+
+---
+
+## 2. Why C++ is an Essential Tool for the R Programmer
+
+While R excels at expressive statistical modeling, vectorized matrix operations, and publication-ready graphics, its interpreted nature introduces overhead in specific computing paradigms:
+
+* **Eliminating Loop Overhead:** R loops carry significant runtime overhead due to dynamic dispatch and continuous copy-on-write semantics. C++ compiles directly to machine code, allowing tight iterative loops (such as MCMC sampling, bootstrapping, or recursive filtering) to execute at hardware speed.
+* **Access to the C++ Standard Template Library (STL):** C++ provides robust, cache-efficient data structures (`std::vector`, `std::unordered_map`, `std::set`) and optimized algorithms (`std::sort`, `std::transform`) that handle non-vectorizable logic cleanly.
+* **Low-Level I/O and System Operations:** String manipulations, custom binary file parsing, socket networking, and sequential disk I/O (such as generating structured HTML documents from memory) often incur less latency and memory consumption when managed at the compiled level.
+* **Deterministic Memory Management (RAII):** C++ manages memory through *Resource Acquisition Is Initialization* (RAII), ensuring file streams (`std::ofstream`) and allocated buffers automatically close and release resources as soon as they go out of scope.
+
+---
+
+## 3. Package Architecture: Calling C++ Through R
+
+The `newsfeed` package pairs an R wrapper with a compiled C++ routine:
+
+```text
+[ User Session ]
+       │
+       ▼
+  fetch_breaking(subjects = c("tech", "energy"))   <-- R/fetch_breaking.R (Validation & UX)
+       │
+       ▼
+  cpp_fetch_breaking_news_html(subjects)           <-- src/RcppExports.cpp (.Call interface)
+       │
+       ▼
+  cpp_fetch_breaking_news_html()                   <-- src/news_fetcher.cpp (Data logic & I/O)
+       │
+       ▼
+  Writes 'breaking_news.html' to disk
+
+```
+
+### The R Interface Layer (`R/fetch_breaking.R`)
+
+The R layer provides argument validation, exposes documentation via `roxygen2`, provides default values, and launches the resulting report in the user's browser.
+
+```r
+#' Fetch Breaking News on Selected Subjects
+#'
+#' @param subjects Character vector of topic keywords. Defaults to c("economy", "tech").
+#' @return Invisibly returns the path to the generated HTML file.
+#' @export
+fetch_breaking <- function(subjects = c("economy", "tech")) {
+  if (!is.character(subjects) || length(subjects) == 0) {
+    stop("Argument 'subjects' must be a non-empty character vector.", call. = FALSE)
+  }
+  
+  outfile <- cpp_fetch_breaking_news_html(subjects = subjects)
+  message(sprintf("HTML digest generated at: %s", normalizePath(outfile)))
+  utils::browseURL(outfile)
+  invisible(outfile)
+}
+
+```
+
+### The C++ Engine (`src/news_fetcher.cpp`)
+
+The backend engine processes subject arrays, searches article records, and streams formatted HTML to disk:
+
+```cpp
+#include <Rcpp.h>
+#include <fstream>
+#include <string>
+#include <vector>
+#include <ctime>
+#include <algorithm>
+#include <cctype>
+
+// Helper: Convert string to lowercase for case-insensitive matching
+std::string to_lower_str(std::string s) {
+    std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c){ 
+        return std::tolower(c); 
+    });
+    return s;
+}
+
+// [[Rcpp::export]]
+std::string cpp_fetch_breaking_news_html(Rcpp::CharacterVector subjects) {
+    std::string out_path = "breaking_news.html";
+    
+    // Internal struct representing a curated news item
+    struct NewsItem {
+        std::string subject_tag;
+        std::string title;
+        std::string source;
+        std::string url;
+        std::string summary;
+    };
+    
+    std::vector<NewsItem> database = {
+        {
+            "economy",
+            "Global Markets React to Central Bank Policy Shifts",
+            "Reuters",
+            "[https://reuters.com](https://reuters.com)",
+            "Global equity benchmarks experienced notable volatility following policy updates from central banks."
+        },
+        {
+            "tech",
+            "Next-Generation Quantum Processor Achieves Fault-Tolerant Benchmark",
+            "TechCrunch",
+            "[https://techcrunch.com](https://techcrunch.com)",
+            "Engineers demonstrated logical qubit fidelity exceeding 99.9%, suppressing physical error rates."
+        }
+    };
+
+    // Vector filtering logic
+    std::vector<NewsItem> filtered_items;
+    for (int i = 0; i < subjects.size(); ++i) {
+        std::string query = to_lower_str(Rcpp::as<std::string>(subjects[i]));
+        for (const auto& item : database) {
+            if (to_lower_str(item.subject_tag).find(query) != std::string::npos || 
+                to_lower_str(item.title).find(query) != std::string::npos) {
+                
+                bool exists = false;
+                for (const auto& f : filtered_items) {
+                    if (f.title == item.title) { exists = true; break; }
+                }
+                if (!exists) filtered_items.push_back(item);
+            }
+        }
+    }
+
+    // Direct HTML File Streaming
+    std::ofstream html_file(out_path.c_str());
+    if (!html_file.is_open()) {
+        Rcpp::stop("Failed to open output HTML file for writing.");
+    }
+
+    html_file << "<!DOCTYPE html>\n<html>\n<head>\n"
+              << "<meta charset=\"UTF-8\">\n<title>News Digest</title>\n"
+              << "<style>body{font-family:sans-serif;margin:40px;background:#f8fafc;}</style>\n"
+              << "</head>\n<body>\n<h1>Curated News Feed</h1>\n";
+
+    for (const auto& item : filtered_items) {
+        html_file << "<div style='margin-bottom:20px;padding:15px;background:#fff;border-left:4px solid #2563eb;'>"
+                  << "<h3><a href='" << item.url << "'>" << item.title << "</a></h3>"
+                  << "<p><strong>Source:</strong> " << item.source << " | <strong>Tag:</strong> " << item.subject_tag << "</p>"
+                  << "<p>" << item.summary << "</p>"
+                  << "</div>\n";
+    }
+
+    html_file << "</body>\n</html>\n";
+    html_file.close();
+
+    return out_path;
+}
+
+```
+
+---
+
+## 4. Key Mechanisms in the R-to-C++ Bridge
+
+1. **`// [[Rcpp::export]]` Attribute:** When `Rcpp::compileAttributes()` runs, this tag tells Rcpp to generate the C-callable registration wrapper in `src/RcppExports.cpp` and the corresponding R calling function in `R/RcppExports.R`.
+2. **Type Marshalling with `Rcpp::as<std::string>()`:** Converts elements of R's high-level string vector (`Rcpp::CharacterVector`) into native C++ Standard Library strings (`std::string`).
+3. **Exception Safety with `Rcpp::stop()`:** If the output file cannot be written, `Rcpp::stop()` intercepts execution, safely unrolls the C++ stack, and raises an idiomatic R-level error without crashing the R session.
+
+---
+
+## 5. Usage Example
+
+```{r}
+library(newsfeed)
+
+# Generate a digest filtering for tech and climate
+fetch_breaking(subjects = c("tech", "climate"))
+
+```
+
+```
+
+---
+
+### Adding the Vignette to Your Package
+
+Run the following in R from your package root directory:
+
+```r
+# 1. Enable vignette building in the package
+usethis::use_vignette("newsfeed-guide", title = "Integrating C++ and R: Architecture of the Newsfeed Package")
+
+# 2. Paste the Markdown content above into vignettes/newsfeed-guide.Rmd
+
+# 3. Build and view the vignette locally
+devtools::build_vignettes()
+devtools::document()
+devtools::install(build_vignettes = TRUE)
+
+# View in R
+vignette("newsfeed-guide", package = "newsfeed")
+
+```

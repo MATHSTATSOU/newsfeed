@@ -2,19 +2,27 @@
 % Please edit documentation in R/fetch_breaking.R
 \name{fetch_breaking}
 \alias{fetch_breaking}
-\title{Fetch World Breaking News to HTML}
+\title{Fetch Breaking News on Selected Subjects}
 \usage{
-fetch_breaking()
+fetch_breaking(subjects = c("economy", "tech"))
+}
+\arguments{
+\item{subjects}{A character vector of topic keywords or themes to search for
+(e.g., \code{c("tech", "energy", "climate")}). Defaults to \code{c("economy", "tech")}.}
 }
 \value{
-Invisibly returns the file path of the generated HTML report.
+Invisibly returns the path to the generated HTML file.
 }
 \description{
-Executes the underlying C++ fetch engine to gather current breaking
-global headlines and write them to a formatted \code{breaking_news.html} file.
+Invokes the C++ engine to scan news articles and executive summaries
+matching specified user subjects, compiling the results into \code{breaking_news.html}.
 }
 \examples{
 \dontrun{
+# Search default subjects
 fetch_breaking()
+
+# Search custom subjects
+fetch_breaking(subjects = c("energy", "space", "health"))
 }
 }
