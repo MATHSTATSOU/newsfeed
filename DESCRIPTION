@@ -1,0 +1,13 @@
+Package: newsfeed
+Title: Fetch World Breaking News and Render HTML
+Version: 0.1.0
+Authors@R: person("Wayne", "Stewart", email = "wayne.s.stewart@ou.edu", role = c("aut", "cre"))
+Description: Fetches global breaking news feeds via C++ backend routines and exports the formatted output to an HTML report.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+Imports: 
+    Rcpp (>= 1.0.0)
+LinkingTo: 
+    Rcpp
+Config/roxygen2/version: 8.1.0
