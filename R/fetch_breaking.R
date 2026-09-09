@@ -6,7 +6,7 @@
 #' @param subjects A character vector of topic keywords or themes to search for
 #'   (e.g., `c("tech", "energy", "climate")`). Defaults to `c("economy", "tech")`.
 #'
-#' @return Invisibly returns the path to the generated HTML file.
+#' @return Invisibly returns the path to the generated HTML file, this is important.
 #' @export
 #'
 #' @examples
